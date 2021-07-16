@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<flow name="testweatherapiFlow2" doc:id="88c91165-120a-42c9-bb95-1a26e79c8a0e" >
+		<http:listener doc:name="Listener" doc:id="89cfa6b3-004e-4649-98b3-54e18bf5faf5" config-ref="httpListenerConfig" path="/validation"/>
+		<validation:is-number numberType="INTEGER" doc:name="Is number" doc:id="e4577677-5275-436a-bf94-bcb3c0397881" value="#[payload]" message='"Is not a number"'/>
+		<set-payload value='#["London"]' doc:name="Set Payload" doc:id="76b80d90-5c08-471a-892a-8dc63dd63a2b" />
+		<validation:is-not-null doc:name="Is not null" doc:id="de557380-33ce-46f1-bb29-023a4793993f" value="#[payload]" message='"The payload is null"'/>
+		<ee:transform doc:name="Transform Message" doc:id="68bdd2f4-575a-44e0-ac8e-122625ce95ce" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+if(payload == "London") "You are in London" else "You are outside London"]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="testweatherapiFlow1" doc:id="6a50279f-da8a-4ef2-8b5c-1a9770758979" >
+		<http:listener doc:name="Listener" doc:id="2862d92b-e2cf-452e-8d20-a333dc68c359" config-ref="httpListenerConfig" path="/test"/>
+		<set-payload value='#["London"]' doc:name="Set Payload" doc:id="1bc854eb-2d13-48dd-a908-0f94613a286b" />
+		<scatter-gather doc:name="Scatter-Gather" doc:id="a10553a8-16e4-404e-ae53-d52fcb5a8043" >
+			<route>
+				<try doc:name="Try" doc:id="7a95604f-5a4b-4f49-85b0-58492f3526b6" >
+					<ee:transform doc:name="Transform Message" doc:id="63feeb36-b82a-4f51-b254-176284f936e4">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+2/0  
+// in case of error will fail all the process.
+// The better way is to wrap all processors with try block
+// and use On Error Continue
+//"First Target " ++ payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					<error-handler >
+						<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="b725fa22-7da5-4d41-95ef-83382511f22e" />
+					</error-handler>
+				</try>
+			</route>
+			<route >
+				<ee:transform doc:name="Transform Message" doc:id="b3072f53-f4a0-47fb-8a48-3211ae676bdc">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+"Second Target " ++ payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</route>
+			<route >
+				<ee:transform doc:name="Transform Message" doc:id="ec03f7b3-5aff-495d-881f-7d57d6621ec3" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Third Target " ++ payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</route>
+		</scatter-gather>
+		<ee:transform doc:name="Transform Message" doc:id="bf315ba7-1da7-4e70-8d07-a5464a4df806" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload[0].payload ++ " " ++ payload[1].payload ++ " " ++ payload[2].payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="33eb0af8-148b-4f8d-96af-1f7c824ae76a" />
+	</flow>
+	<flow name="testweatherapiFlow" doc:id="73cf21ae-517e-499b-a12e-5091462b4096" >
+		<http:listener doc:name="Listener" doc:id="6e091116-386d-430c-a0a8-2a4dc71ca705" config-ref="httpListenerConfig" path="/test/{locKey}"/>
+		<http:request method="GET" doc:name="Request" doc:id="b60b5450-9af0-43f5-a24b-e43a2c7220c8" config-ref="httpRequestConfig" url="http://dataservice.accuweather.com/currentconditions/v1/{locationKey}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	locationKey : "$(attributes.uriParams.locKey)"
+}]]]></http:uri-params>
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	apikey : "$(attributes.queryParams.apikey)"
+}]]]></http:query-params>
+			<http:response-validator >
+				<http:success-status-code-validator values="200..499" />
+			</http:response-validator>
+		</http:request>
+		<choice doc:name="Choice" doc:id="17f5d36b-4c78-457c-97d5-ed972cb42122" >
+			<when expression='#[attributes.statusCode as String == "200"]'>
+				<ee:transform doc:name="Transform Message" doc:id="f7b2a73d-708f-4f4c-b1da-5b910e20f90c">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+//payload
+//payload reduce($ ++ $$)
+
+payload map{
+	"Metric Temperature": $.Temperature.Metric.Value ++ " Celcius",
+	"Imperial Temperature": $.Temperature.Imperial.Value ++ " Fahrenheit",
+	"Weather Text": $.WeatherText,
+	"Is Day Time": $.IsDayTime,
+	"Local Time": $.LocalObservationDateTime
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="2fb32463-0943-46fe-9301-34b7aa1e59dc" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	statusCode: attributes.statusCode,
+	code: payload.Code,
+	message: payload.Message
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
